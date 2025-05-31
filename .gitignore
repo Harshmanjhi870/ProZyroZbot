@@ -23,13 +23,13 @@ wheels/
 .installed.cfg
 *.egg
 
-# Session files
-*.session
-*.session-journal
-
 # Logs
 *.log
 logs/
+
+# Database
+*.db
+*.sqlite3
 
 # IDE
 .vscode/
@@ -40,3 +40,11 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Bot session files
+*.session
+*.session-journal
+
+# Temporary files
+tmp/
+temp/
