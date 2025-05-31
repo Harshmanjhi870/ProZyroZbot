@@ -159,26 +159,26 @@ class GameManager:
         try:
             if chat_id not in self.active_games:
                 return {"success": False, "error": False}
-        
+            
             game = self.active_games[chat_id]
-        
+            
             if game["status"] != "active":
                 return {"success": False, "error": False}
-        
+            
             # Check if it's the player's turn
             current_player = game["players"][game["current_player"]]
             if current_player["id"] != user_id:
                 # Silently ignore - don't send any error message
                 return {"success": False, "error": False, "is_current_player": False}
-        
+            
             # Mark that this is the current player
             is_current_player = True
-        
+            
             # Validate word
             validation_result = await self.word_validator.validate_word(
                 word, game["next_letter"], game["used_words"]
             )
-        
+            
             if not validation_result["valid"]:
                 # Wrong answer - eliminate player
                 await self.eliminate_player(chat_id, user_id)
@@ -189,51 +189,51 @@ class GameManager:
                     "eliminated": True,
                     "is_current_player": is_current_player
                 }
-        
+            
             # Correct answer
             points = config.POINTS_PER_WORD
-        
+            
             # Add bonus points for rare words
             if validation_result.get("rare", False):
                 points += config.BONUS_POINTS
-        
+            
             # Add streak bonus
             current_player["streak"] += 1
             if current_player["streak"] > 1:
                 points += current_player["streak"] - 1
-        
+            
             current_player["score"] += points
-        
+            
             # Add word to used words
             game["used_words"].add(word.lower())
             game["last_word"] = word.title()
             game["next_letter"] = word[-1].lower()
-        
+            
             # Update player stats
             await db.update_player_stats(user_id, user_name, "correct_word", points)
-        
+            
             # Check win condition
             if current_player["score"] >= 100 or game["round"] >= game["max_rounds"]:
                 return await self.end_game_with_winner(chat_id)
-        
+            
             # Move to next turn
             await self.next_turn(chat_id)
-        
+            
             # Update database
             await db.update_game(chat_id, game)
-        
+            
             # Cancel current turn timer and start new one
             if chat_id in self.turn_timers:
                 self.turn_timers[chat_id].cancel()
-        
+            
             # Don't start new timer if game ended
             if chat_id in self.active_games:
                 self.turn_timers[chat_id] = asyncio.create_task(
-                    self.turn_timeout(chat_id, None)
+                    self.turn_timeout(chat_id, client=None)
                 )
-        
+            
             next_player = game["players"][game["current_player"]]
-        
+            
             return {
                 "success": True,
                 "type": "correct",
@@ -243,15 +243,15 @@ class GameManager:
                 "next_player": next_player["name"],
                 "is_current_player": is_current_player
             }
-        
-    except Exception as e:
-        logger.error(f"Error processing word: {e}")
-        return {
-            "success": False, 
-            "error": True, 
-            "message": "An error occurred. Please try again.",
-            "is_current_player": True
-        }
+            
+        except Exception as e:
+            logger.error(f"Error processing word: {e}")
+            return {
+                "success": False, 
+                "error": True, 
+                "message": "An error occurred. Please try again.",
+                "is_current_player": True
+            }
     
     async def eliminate_player(self, chat_id: int, user_id: int):
         """Eliminate a player from the game"""
@@ -280,7 +280,7 @@ class GameManager:
                         if game["current_player"] >= len(game["players"]):
                             game["current_player"] = 0
                 
-                break
+                    break
     
     async def declare_winner(self, chat_id: int, winner: dict):
         """Declare the winner and end the game"""
@@ -319,17 +319,17 @@ class GameManager:
         """Handle turn timeout - eliminate player"""
         try:
             await asyncio.sleep(config.TURN_TIME)
-        
+            
             if chat_id in self.active_games:
                 game = self.active_games[chat_id]
                 if len(game["players"]) == 0:
                     return
                 
                 current_player = game["players"][game["current_player"]]
-        
+            
                 # Eliminate the player who timed out
                 await self.eliminate_player(chat_id, current_player["id"])
-        
+            
                 if client and chat_id in self.active_games:
                     game = self.active_games[chat_id]  # Get updated game state
                     remaining_players = len(game["players"])
@@ -366,11 +366,11 @@ class GameManager:
                             f"🎮 **Game Over** - No players remaining!"
                         )
                         await self.end_game(chat_id)
-        
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        logger.error(f"Error in turn timeout: {e}")
+            
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Error in turn timeout: {e}")
     
     async def end_game_with_winner(self, chat_id: int) -> dict:
         """End game and declare winner"""
