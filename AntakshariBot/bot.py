@@ -173,23 +173,21 @@ class AntakshariBot:
                         points = result.get("points", config.POINTS_PER_WORD)
                         streak = result.get("streak", 0)
                         next_letter = result.get("next_letter", "")
+                        next_player = result.get("next_player", "Unknown")
                         
+                        # Combine both messages into one
                         response = f"✅ **Correct!** +{points} points\n"
                         if streak > 1:
                             response += f"🔥 Streak: {streak}\n"
                         response += f"📝 Next word should start with: **{next_letter.upper()}**\n"
-                        response += f"👤 Next player: {result.get('next_player', 'Unknown')}"
+                        response += f"\n🎮 **{next_player}**, it's your turn!\n"
+                        response += f"📝 Say a country or city starting with **{next_letter.upper()}**\n"
+                        response += f"⏰ You have {config.TURN_TIME} seconds to answer."
                         
                         await message.reply_text(response)
                         
-                        # Notify the next player it's their turn
-                        if result.get("type") == "correct" and result.get("next_player"):
-                            next_player_id = result.get("next_player_id")
-                            next_player_name = result.get("next_player")
-                            next_letter = result.get("next_letter", "").upper()
-                            
-                            # Send a separate message mentioning the next player
-                            await self.notify_player_turn(chat_id, next_player_name, next_letter, config.TURN_TIME)
+                        # Remove the separate notification call
+                        # Don't call notify_player_turn anymore
                         
                     elif result["type"] == "game_won":
                         winner = result.get("winner")
@@ -212,10 +210,8 @@ class AntakshariBot:
                         await message.reply_text(response)
 
                 elif result.get("error"):
-                    if result.get("eliminated"):
-                        await message.reply_text(f"❌ {result['message']}\n🚫 **You have been eliminated!**")
-                    else:
-                        await message.reply_text(f"❌ {result['message']}")
+                    # Only show error message, no elimination for wrong answers
+                    await message.reply_text(f"❌ {result['message']}")
         
         @self.app.on_message(filters.command("stats"))
         async def user_stats(client, message: Message):

@@ -185,13 +185,13 @@ class GameManager:
             )
             
             if not validation_result["valid"]:
-                # Wrong answer - eliminate player
-                await self.eliminate_player(chat_id, user_id)
+                # Wrong answer - don't eliminate, just return error
+                # await self.eliminate_player(chat_id, user_id)
                 return {
                     "success": False, 
                     "error": True, 
                     "message": validation_result["reason"], 
-                    "eliminated": True,
+                    "eliminated": False,
                     "is_current_player": is_current_player
                 }
             
