@@ -3,6 +3,7 @@ import logging
 from pyrogram import Client
 from AntakshariBot.bot import AntakshariBot
 from AntakshariBot.database import init_db
+from AntakshariBot.data.data_loader import init_data_loader
 import config
 
 # Configure logging
@@ -22,6 +23,13 @@ async def main():
         # Initialize database
         await init_db()
         logger.info("Database initialized successfully")
+        
+        # Initialize data loader (countries and cities)
+        data_loaded = await init_data_loader()
+        if data_loaded:
+            logger.info("Word data loaded successfully")
+        else:
+            logger.warning("Failed to load word data, using fallback data")
         
         # Initialize and start bot
         bot = AntakshariBot()

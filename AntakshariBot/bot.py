@@ -307,6 +307,98 @@ class AntakshariBot:
                 )
                 await callback_query.answer(rules_text, show_alert=True)
     
+        @self.app.on_message(filters.command("countries"))
+        async def list_countries(client, message: Message):
+            try:
+                from AntakshariBot.data.data_loader import data_loader
+                
+                if not data_loader.data_loaded:
+                    await data_loader.load_all_data()
+                
+                countries_sample = list(data_loader.countries)[:50]  # Show first 50
+                
+                response = f"🌍 **Available Countries** (showing {len(countries_sample)} of {len(data_loader.countries)}):\n\n"
+                
+                for i, country in enumerate(sorted(countries_sample), 1):
+                    response += f"{i}. {country.title()}\n"
+                    if i % 20 == 0:  # Break every 20 countries
+                        response += "\n"
+                
+                response += f"\n📊 **Total Countries:** {len(data_loader.countries)}"
+                
+                await message.reply_text(response)
+                
+            except Exception as e:
+                logger.error(f"Error listing countries: {e}")
+                await message.reply_text("❌ Error loading countries list.")
+
+        @self.app.on_message(filters.command("cities"))
+        async def list_cities(client, message: Message):
+            try:
+                from AntakshariBot.data.data_loader import data_loader
+                
+                if not data_loader.data_loaded:
+                    await data_loader.load_all_data()
+                
+                cities_sample = list(data_loader.cities)[:50]  # Show first 50
+                
+                response = f"🏙️ **Available Cities** (showing {len(cities_sample)} of {len(data_loader.cities)}):\n\n"
+                
+                for i, city in enumerate(sorted(cities_sample), 1):
+                    response += f"{i}. {city.title()}\n"
+                    if i % 20 == 0:  # Break every 20 cities
+                        response += "\n"
+                
+                response += f"\n📊 **Total Cities:** {len(data_loader.cities)}"
+                
+                await message.reply_text(response)
+                
+            except Exception as e:
+                logger.error(f"Error listing cities: {e}")
+                await message.reply_text("❌ Error loading cities list.")
+
+        @self.app.on_message(filters.command("wordstats"))
+        async def word_stats(client, message: Message):
+            try:
+                stats = await self.game_manager.word_validator.get_word_count()
+                
+                response = f"📊 **Word Database Statistics**\n\n"
+                response += f"🌍 Countries: {stats['countries']:,}\n"
+                response += f"🏙️ Cities: {stats['cities']:,}\n"
+                response += f"💎 Rare Words: {stats['rare_words']:,}\n"
+                response += f"📈 Total Words: {stats['total_words']:,}\n\n"
+                response += f"🔄 Data Source: GitHub Repository\n"
+                response += f"📅 Auto-updated from dr5hn/countries-states-cities-database"
+                
+                await message.reply_text(response)
+                
+            except Exception as e:
+                logger.error(f"Error getting word stats: {e}")
+                await message.reply_text("❌ Error loading word statistics.")
+
+        @self.app.on_message(filters.command("refreshdata") & filters.user(config.OWNER_ID))
+        async def refresh_data(client, message: Message):
+            try:
+                await message.reply_text("🔄 Refreshing word data...")
+                
+                success = await self.game_manager.word_validator.refresh_data()
+                
+                if success:
+                    stats = await self.game_manager.word_validator.get_word_count()
+                    response = f"✅ **Data Refreshed Successfully!**\n\n"
+                    response += f"🌍 Countries: {stats['countries']:,}\n"
+                    response += f"🏙️ Cities: {stats['cities']:,}\n"
+                    response += f"💎 Rare Words: {stats['rare_words']:,}\n"
+                    response += f"📈 Total Words: {stats['total_words']:,}"
+                else:
+                    response = "❌ Failed to refresh data. Using cached data."
+                
+                await message.reply_text(response)
+                
+            except Exception as e:
+                logger.error(f"Error refreshing data: {e}")
+                await message.reply_text("❌ Error refreshing word data.")
+    
     async def notify_player_turn(self, chat_id, player_name, next_letter, turn_time):
         """Send a notification to the group that it's a player's turn"""
         try:
