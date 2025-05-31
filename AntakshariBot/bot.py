@@ -19,6 +19,7 @@ class AntakshariBot:
         )
         
         self.game_manager = GameManager()
+        self.app.join_timers = {}
         self.setup_handlers()
     
     def setup_handlers(self):
@@ -103,7 +104,7 @@ class AntakshariBot:
                 )
                 
                 # Start join timer
-                asyncio.create_task(self.game_manager.start_join_timer(chat_id, client))
+                self.app.join_timers[chat_id] = asyncio.create_task(self.game_manager.start_join_timer(chat_id, client))
             else:
                 await message.reply_text(f"❌ {result['message']}")
         
@@ -163,7 +164,7 @@ class AntakshariBot:
             user_name = message.from_user.first_name
             word = message.text.strip().lower()
             
-            result = await self.game_manager.process_word(chat_id, user_id, user_name, word)
+            result = await self.game_manager.process_word(chat_id, user_id, user_name, word, client)
             
             # Only respond if it's the current player's turn
             if result.get("is_current_player", True):
@@ -180,6 +181,15 @@ class AntakshariBot:
                         response += f"👤 Next player: {result.get('next_player', 'Unknown')}"
                         
                         await message.reply_text(response)
+                        
+                        # Notify the next player it's their turn
+                        if result.get("type") == "correct" and result.get("next_player"):
+                            next_player_id = result.get("next_player_id")
+                            next_player_name = result.get("next_player")
+                            next_letter = result.get("next_letter", "").upper()
+                            
+                            # Send a separate message mentioning the next player
+                            await self.notify_player_turn(chat_id, next_player_name, next_letter, config.TURN_TIME)
                         
                     elif result["type"] == "game_won":
                         winner = result.get("winner")
@@ -300,6 +310,18 @@ class AntakshariBot:
                     "• Last player wins"
                 )
                 await callback_query.answer(rules_text, show_alert=True)
+    
+    async def notify_player_turn(self, chat_id, player_name, next_letter, turn_time):
+        """Send a notification to the group that it's a player's turn"""
+        try:
+            await self.app.send_message(
+                chat_id,
+                f"🎮 **{player_name}**, it's your turn!\n"
+                f"📝 Say a country or city starting with **{next_letter.upper() if next_letter else 'Any'}**\n"
+                f"⏰ You have {turn_time} seconds to answer."
+            )
+        except Exception as e:
+            logger.error(f"Error sending turn notification: {e}")
     
     async def start(self):
         """Start the bot"""
