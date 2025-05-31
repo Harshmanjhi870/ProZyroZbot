@@ -1,9 +1,7 @@
 import json
 import logging
-import aiohttp
-import asyncio
-from typing import Set, Dict, List
 import os
+from typing import Set, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -15,141 +13,94 @@ class DataLoader:
         self.alternative_names: Dict[str, str] = {}
         self.data_loaded = False
         
-        # GitHub raw URLs for the JSON files
-        self.countries_url = "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/countries.json"
-        self.cities_url = "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/cities.json"
-        
-        # Local file paths
-        self.data_dir = "AntakshariBot/data/json_data"
-        self.countries_file = f"{self.data_dir}/countries.json"
-        self.cities_file = f"{self.data_dir}/cities.json"
+        # Local JSON file path - YOU NEED TO UPLOAD YOUR JSON FILE HERE
+        self.json_file = "AntakshariBot/data/countries_cities.json"
     
-    async def ensure_data_directory(self):
-        """Ensure the data directory exists"""
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
-    
-    async def download_file(self, url: str, filename: str) -> bool:
-        """Download a file from URL"""
+    async def load_data_from_json(self) -> bool:
+        """Load countries and cities data from local JSON file"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        content = await response.read()
-                        with open(filename, 'wb') as f:
-                            f.write(content)
-                        logger.info(f"Downloaded {filename}")
-                        return True
-                    else:
-                        logger.error(f"Failed to download {url}: {response.status}")
-                        return False
-        except Exception as e:
-            logger.error(f"Error downloading {url}: {e}")
-            return False
-    
-    async def load_countries_data(self) -> bool:
-        """Load countries data from JSON"""
-        try:
-            # Try to load from local file first
-            if not os.path.exists(self.countries_file):
-                logger.info("Countries file not found, downloading...")
-                await self.ensure_data_directory()
-                if not await self.download_file(self.countries_url, self.countries_file):
-                    return False
+            # Check if file exists
+            if not os.path.exists(self.json_file):
+                logger.error(f"JSON file not found: {self.json_file}")
+                logger.error("Please upload your countries_cities.json file to AntakshariBot/data/ folder")
+                return False
             
-            with open(self.countries_file, 'r', encoding='utf-8') as f:
-                countries_data = json.load(f)
+            # Load JSON data
+            with open(self.json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-            # Extract country names
-            for country in countries_data:
-                name = country.get('name', '').strip()
-                if name and len(name) >= 2:
-                    self.countries.add(name.lower())
+            # Clear existing data
+            self.countries.clear()
+            self.cities.clear()
+            self.rare_words.clear()
+            
+            # Process each country
+            for country_data in data:
+                country_name = country_data.get('name', '').strip()
+                cities_list = country_data.get('cities', [])
+                
+                # Add country name
+                if country_name and len(country_name) >= 2:
+                    self.countries.add(country_name.lower())
                     
-                    # Add alternative names if available
-                    if len(name) > 8:  # Consider longer names as rare
-                        self.rare_words.add(name.lower())
-            
-            # Add some manual alternative names
-            self.alternative_names.update({
-                "usa": "united states",
-                "united states": "usa",
-                "uk": "united kingdom",
-                "united kingdom": "uk",
-                "uae": "united arab emirates",
-                "united arab emirates": "uae"
-            })
-            
-            logger.info(f"Loaded {len(self.countries)} countries")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error loading countries data: {e}")
-            return False
-    
-    async def load_cities_data(self) -> bool:
-        """Load cities data from JSON"""
-        try:
-            # Try to load from local file first
-            if not os.path.exists(self.cities_file):
-                logger.info("Cities file not found, downloading...")
-                await self.ensure_data_directory()
-                if not await self.download_file(self.cities_url, self.cities_file):
-                    return False
-            
-            with open(self.cities_file, 'r', encoding='utf-8') as f:
-                cities_data = json.load(f)
-            
-            # Extract city names
-            for city in cities_data:
-                name = city.get('name', '').strip()
-                if name and len(name) >= 2:
-                    # Filter out cities with numbers or special characters
-                    if name.replace(' ', '').replace('-', '').replace("'", '').isalpha():
-                        self.cities.add(name.lower())
+                    # Mark long country names as rare
+                    if len(country_name) > 8:
+                        self.rare_words.add(country_name.lower())
+                
+                # Add cities for this country
+                for city in cities_list:
+                    city_name = city.strip()
+                    if city_name and len(city_name) >= 2:
+                        # Clean city name - remove special characters at start
+                        clean_city = city_name.lstrip("'\"").strip()
                         
-                        # Consider longer city names as rare
-                        if len(name) > 12:
-                            self.rare_words.add(name.lower())
+                        # Only add if it contains mostly letters
+                        if clean_city and len(clean_city.replace(' ', '').replace('-', '').replace("'", '')) >= 2:
+                            # Check if it's mostly alphabetic
+                            alpha_chars = sum(1 for c in clean_city if c.isalpha())
+                            total_chars = len(clean_city.replace(' ', '').replace('-', '').replace("'", ''))
+                            
+                            if total_chars > 0 and (alpha_chars / total_chars) >= 0.8:
+                                self.cities.add(clean_city.lower())
+                                
+                                # Mark long city names as rare
+                                if len(clean_city) > 12:
+                                    self.rare_words.add(clean_city.lower())
             
-            # Add some manual alternative names for cities
+            # Add manual alternative names
             self.alternative_names.update({
                 "mumbai": "bombay",
                 "bombay": "mumbai",
-                "kolkata": "calcutta",
+                "kolkata": "calcutta", 
                 "calcutta": "kolkata",
                 "chennai": "madras",
                 "madras": "chennai",
                 "beijing": "peking",
                 "peking": "beijing",
                 "new york": "new york city",
-                "new york city": "new york"
+                "new york city": "new york",
+                "usa": "united states",
+                "united states": "usa",
+                "uk": "united kingdom", 
+                "united kingdom": "uk",
+                "uae": "united arab emirates",
+                "united arab emirates": "uae"
             })
             
-            logger.info(f"Loaded {len(self.cities)} cities")
+            self.data_loaded = True
+            logger.info(f"Data loaded successfully: {len(self.countries)} countries, {len(self.cities)} cities, {len(self.rare_words)} rare words")
             return True
             
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON format in {self.json_file}: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Error loading cities data: {e}")
+            logger.error(f"Error loading data from JSON: {e}")
             return False
     
     async def load_all_data(self) -> bool:
-        """Load all data (countries and cities)"""
-        try:
-            countries_loaded = await self.load_countries_data()
-            cities_loaded = await self.load_cities_data()
-            
-            if countries_loaded and cities_loaded:
-                self.data_loaded = True
-                logger.info(f"Data loaded successfully: {len(self.countries)} countries, {len(self.cities)} cities, {len(self.rare_words)} rare words")
-                return True
-            else:
-                logger.error("Failed to load some data files")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error loading data: {e}")
-            return False
+        """Load all data from local JSON file"""
+        return await self.load_data_from_json()
     
     def get_all_words(self) -> Set[str]:
         """Get all valid words (countries + cities)"""
@@ -163,28 +114,14 @@ class DataLoader:
         """Get alternative name for a word if exists"""
         return self.alternative_names.get(word.lower(), word)
     
-    async def refresh_data(self) -> bool:
-        """Force refresh data by downloading latest files"""
-        try:
-            await self.ensure_data_directory()
-            
-            # Remove existing files
-            if os.path.exists(self.countries_file):
-                os.remove(self.countries_file)
-            if os.path.exists(self.cities_file):
-                os.remove(self.cities_file)
-            
-            # Clear existing data
-            self.countries.clear()
-            self.cities.clear()
-            self.rare_words.clear()
-            
-            # Reload data
-            return await self.load_all_data()
-            
-        except Exception as e:
-            logger.error(f"Error refreshing data: {e}")
-            return False
+    def get_stats(self) -> dict:
+        """Get statistics about loaded data"""
+        return {
+            "countries": len(self.countries),
+            "cities": len(self.cities), 
+            "rare_words": len(self.rare_words),
+            "total_words": len(self.get_all_words())
+        }
 
 # Global data loader instance
 data_loader = DataLoader()

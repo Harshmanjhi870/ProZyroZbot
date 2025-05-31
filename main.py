@@ -24,12 +24,13 @@ async def main():
         await init_db()
         logger.info("Database initialized successfully")
         
-        # Initialize data loader (countries and cities)
+        # Initialize data loader (countries and cities from JSON)
         data_loaded = await init_data_loader()
         if data_loaded:
-            logger.info("Word data loaded successfully")
+            logger.info("Word data loaded successfully from JSON file")
         else:
-            logger.warning("Failed to load word data, using fallback data")
+            logger.warning("Failed to load word data from JSON file, using fallback data")
+            logger.warning("Make sure to upload countries_cities.json to AntakshariBot/data/ folder")
         
         # Initialize and start bot
         bot = AntakshariBot()

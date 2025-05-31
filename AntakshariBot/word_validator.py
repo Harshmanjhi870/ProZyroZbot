@@ -12,10 +12,10 @@ class WordValidator:
     async def ensure_data_loaded(self):
         """Ensure data is loaded before validation"""
         if not data_loader.data_loaded:
-            logger.info("Loading word data...")
+            logger.info("Loading word data from JSON file...")
             success = await data_loader.load_all_data()
             if not success:
-                logger.error("Failed to load word data, using fallback")
+                logger.error("Failed to load word data from JSON file")
                 # Fallback to basic words if data loading fails
                 self.valid_words = {
                     "india", "america", "china", "japan", "france", "germany", "italy", "spain",
@@ -41,12 +41,12 @@ class WordValidator:
             if not word_clean:
                 return {"valid": False, "reason": "Please enter a word!"}
             
-            # Check if word contains only letters and spaces/hyphens
+            # Check if word contains only letters and spaces/hyphens/apostrophes
             if not all(c.isalpha() or c in [' ', '-', "'"] for c in word_clean):
                 return {"valid": False, "reason": "Word must contain only letters!"}
             
             # Check minimum length
-            if len(word_clean.replace(' ', '').replace('-', '')) < 2:
+            if len(word_clean.replace(' ', '').replace('-', '').replace("'", '')) < 2:
                 return {"valid": False, "reason": "Word must be at least 2 letters long!"}
             
             # Check if word starts with required letter
@@ -80,17 +80,16 @@ class WordValidator:
         if not self.data_ready:
             await self.ensure_data_loaded()
         
-        return {
-            "total_words": len(self.valid_words),
-            "countries": len(data_loader.countries),
-            "cities": len(data_loader.cities),
-            "rare_words": len(data_loader.rare_words)
-        }
+        return data_loader.get_stats()
     
     async def refresh_data(self) -> bool:
-        """Refresh word data"""
+        """Refresh word data from JSON file"""
         try:
-            success = await data_loader.refresh_data()
+            # Clear current data
+            data_loader.data_loaded = False
+            
+            # Reload from JSON
+            success = await data_loader.load_all_data()
             if success:
                 self.valid_words = data_loader.get_all_words()
                 self.data_ready = True
