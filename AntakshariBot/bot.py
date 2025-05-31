@@ -80,6 +80,9 @@ class AntakshariBot:
             user_id = message.from_user.id
             user_name = message.from_user.first_name
             
+            # First try to end any existing game in the database
+            await self.game_manager.end_game(chat_id)
+            
             result = await self.game_manager.start_game(chat_id, user_id, user_name)
             
             if result["success"]:

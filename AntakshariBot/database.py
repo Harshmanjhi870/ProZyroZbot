@@ -51,6 +51,16 @@ class Database:
     async def create_game(self, game_data: dict):
         """Create a new game record"""
         try:
+            # First check if a game already exists for this chat
+            existing_game = await self.db.games.find_one({"chat_id": game_data["chat_id"]})
+            
+            if existing_game:
+                # Update the existing game instead of creating a new one
+                await self.update_game(game_data["chat_id"], game_data)
+                logger.info(f"Updated existing game for chat {game_data['chat_id']}")
+                return
+            
+            # Create new game record if none exists
             game_record = {
                 "chat_id": game_data["chat_id"],
                 "status": game_data["status"],
