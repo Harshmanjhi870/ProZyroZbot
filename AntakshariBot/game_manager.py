@@ -176,10 +176,9 @@ class GameManager:
             )
             
             if not validation_result["valid"]:
-                # Wrong answer - reduce streak and move to next player
-                current_player["streak"] = 0
-                await self.next_turn(chat_id)
-                return {"success": False, "error": True, "message": validation_result["reason"]}
+                # Wrong answer - eliminate player
+                await self.eliminate_player(chat_id, user_id)
+                return {"success": False, "error": True, "message": validation_result["reason"], "eliminated": True}
             
             # Correct answer
             points = config.POINTS_PER_WORD
@@ -238,6 +237,61 @@ class GameManager:
             logger.error(f"Error processing word: {e}")
             return {"success": False, "error": True, "message": "An error occurred. Please try again."}
     
+    async def eliminate_player(self, chat_id: int, user_id: int):
+        """Eliminate a player from the game"""
+        if chat_id in self.active_games:
+            game = self.active_games[chat_id]
+            
+            # Find and remove the player
+            for i, player in enumerate(game["players"]):
+                if player["id"] == user_id:
+                    eliminated_player = game["players"].pop(i)
+                    
+                    # Adjust current player index if needed
+                    if i <= game["current_player"]:
+                        game["current_player"] = max(0, game["current_player"] - 1)
+                    
+                    # Check if only one player remains
+                    if len(game["players"]) == 1:
+                        # Last player wins
+                        winner = game["players"][0]
+                        await self.declare_winner(chat_id, winner)
+                    elif len(game["players"]) == 0:
+                        # No players left, end game
+                        await self.end_game(chat_id)
+                    else:
+                        # Continue with next player
+                        if game["current_player"] >= len(game["players"]):
+                            game["current_player"] = 0
+                
+                break
+    
+    async def declare_winner(self, chat_id: int, winner: dict):
+        """Declare the winner and end the game"""
+        if chat_id in self.active_games:
+            game = self.active_games[chat_id]
+        
+            # Update player stats
+            for player in game["players"]:
+                is_winner = player["id"] == winner["id"]
+                await db.update_player_stats(
+                    player["id"], 
+                    player["name"], 
+                    "game_finished", 
+                    player["score"],
+                    is_winner
+                )
+        
+            # End the game
+            await self.end_game(chat_id)
+        
+            return {
+                "success": True,
+                "type": "game_won",
+                "winner": winner,
+                "reason": "last_player"
+            }
+    
     async def next_turn(self, chat_id: int):
         """Move to the next player's turn"""
         if chat_id in self.active_games:
@@ -246,35 +300,48 @@ class GameManager:
             game["round"] += 1
     
     async def turn_timeout(self, chat_id: int, client):
-        """Handle turn timeout"""
+        """Handle turn timeout - eliminate player"""
         try:
             await asyncio.sleep(config.TURN_TIME)
             
             if chat_id in self.active_games:
                 game = self.active_games[chat_id]
                 current_player = game["players"][game["current_player"]]
-                
-                # Reset streak for timeout
-                current_player["streak"] = 0
-                
-                # Move to next turn
-                await self.next_turn(chat_id)
-                
-                if client:
-                    next_player = game["players"][game["current_player"]]
-                    await client.send_message(
-                        chat_id,
-                        f"⏰ **Time's up!** {current_player['name']}\n"
-                        f"🎯 **Next turn:** {next_player['name']}\n"
-                        f"📝 **Next letter:** {game['next_letter'].upper() if game['next_letter'] else 'Any'}"
-                    )
-                
-                # Start next turn timer
-                if chat_id in self.active_games:
-                    self.turn_timers[chat_id] = asyncio.create_task(
-                        self.turn_timeout(chat_id, client)
-                    )
-                
+            
+                # Eliminate the player who timed out
+                await self.eliminate_player(chat_id, current_player["id"])
+            
+                if client and chat_id in self.active_games:
+                    remaining_players = len(game["players"])
+                    if remaining_players == 1:
+                        winner = game["players"][0]
+                        await client.send_message(
+                            chat_id,
+                            f"⏰ **{current_player['name']} eliminated due to timeout!**\n\n"
+                            f"🎉 **{winner['name']} wins the game!**\n"
+                            f"🏆 **Final Score:** {winner['score']} points"
+                        )
+                    elif remaining_players > 1:
+                        next_player = game["players"][game["current_player"]]
+                        await client.send_message(
+                            chat_id,
+                            f"⏰ **{current_player['name']} eliminated due to timeout!**\n"
+                            f"👥 **Players remaining:** {remaining_players}\n"
+                            f"🎯 **Next turn:** {next_player['name']}\n"
+                            f"📝 **Next letter:** {game['next_letter'].upper() if game['next_letter'] else 'Any'}"
+                        )
+                    
+                        # Start next turn timer
+                        self.turn_timers[chat_id] = asyncio.create_task(
+                            self.turn_timeout(chat_id, client)
+                        )
+                    else:
+                        await client.send_message(
+                            chat_id,
+                            f"⏰ **{current_player['name']} eliminated!**\n\n"
+                            f"🎮 **Game Over** - No players remaining!"
+                        )
+            
         except asyncio.CancelledError:
             pass
         except Exception as e:

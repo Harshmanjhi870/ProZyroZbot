@@ -178,20 +178,29 @@ class AntakshariBot:
                     
                 elif result["type"] == "game_won":
                     winner = result.get("winner")
-                    final_scores = result.get("scores", {})
+                    reason = result.get("reason", "points")
                     
-                    response = f"🎉 **Game Over!**\n\n"
-                    response += f"🏆 **Winner:** {winner['name']} ({winner['score']} points)\n\n"
-                    response += "📊 **Final Scores:**\n"
-                    
-                    for player_id, score in sorted(final_scores.items(), key=lambda x: x[1], reverse=True):
-                        player_name = result.get("player_names", {}).get(str(player_id), "Unknown")
-                        response += f"• {player_name}: {score} points\n"
+                    if reason == "last_player":
+                        response = f"🎉 **Game Over!**\n\n"
+                        response += f"🏆 **Winner:** {winner['name']} (Last player standing!)\n"
+                        response += f"💯 **Final Score:** {winner['score']} points"
+                    else:
+                        final_scores = result.get("scores", {})
+                        response = f"🎉 **Game Over!**\n\n"
+                        response += f"🏆 **Winner:** {winner['name']} ({winner['score']} points)\n\n"
+                        response += "📊 **Final Scores:**\n"
+                        
+                        for player_id, score in sorted(final_scores.items(), key=lambda x: x[1], reverse=True):
+                            player_name = result.get("player_names", {}).get(str(player_id), "Unknown")
+                            response += f"• {player_name}: {score} points\n"
                     
                     await message.reply_text(response)
-            
-            elif result["error"]:
-                await message.reply_text(f"❌ {result['message']}")
+
+            elif result.get("error"):
+                if result.get("eliminated"):
+                    await message.reply_text(f"❌ {result['message']}\n🚫 **You have been eliminated!**")
+                else:
+                    await message.reply_text(f"❌ {result['message']}")
         
         @self.app.on_message(filters.command("stats"))
         async def user_stats(client, message: Message):
@@ -267,25 +276,23 @@ class AntakshariBot:
             
             elif data == "help":
                 help_text = (
-                    "🎮 **How to Play Antakshari**\n\n"
-                    "1️⃣ Start a game with /antakshari\n"
-                    "2️⃣ Players join with /join\n"
-                    "3️⃣ Say country or city names\n"
+                    "🎮 How to Play:\n"
+                    "1️⃣ /antakshari to start\n"
+                    "2️⃣ /join to join game\n"
+                    "3️⃣ Say country/city names\n"
                     "4️⃣ Next word starts with last letter\n"
-                    "5️⃣ No repetition allowed\n"
-                    "6️⃣ Earn points for correct answers!"
+                    "5️⃣ No repetition allowed"
                 )
                 await callback_query.answer(help_text, show_alert=True)
             
             elif data == "game_rules":
                 rules_text = (
-                    "📋 **Game Rules**\n\n"
-                    "• Only country and city names allowed\n"
+                    "📋 Rules:\n"
+                    "• Country/city names only\n"
                     "• 30 seconds per turn\n"
-                    "• No repetition of words\n"
-                    "• Case insensitive\n"
-                    "• Minimum 2 players to start\n"
-                    "• Game ends after 50 rounds or when only 1 player remains"
+                    "• No repetition\n"
+                    "• Get eliminated if timeout\n"
+                    "• Last player wins"
                 )
                 await callback_query.answer(rules_text, show_alert=True)
     
